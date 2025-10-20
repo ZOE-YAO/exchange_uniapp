@@ -1,0 +1,41 @@
+{
+	"pages": [
+		{
+			"path": "pages/index/index",
+			"style": {
+				"navigationStyle": "custom",
+				"backgroundColor": "#F5F5F7",
+				"enablePullDownRefresh": true
+			}
+		},
+		{
+			"path": "pages/currency-select/index",
+			"style": {
+				"navigationBarTitleText": "选择币种",
+				"navigationBarBackgroundColor": "#FFFFFF",
+				"navigationBarTextStyle": "black",
+				"backgroundColor": "#F5F5F7"
+			}
+		},
+		{
+			"path": "pages/settings/index",
+			"style": {
+				"navigationBarTitleText": "设置",
+				"navigationBarBackgroundColor": "#FFFFFF",
+				"navigationBarTextStyle": "black",
+				"backgroundColor": "#F5F5F7"
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "汇率速算",
+		"navigationBarBackgroundColor": "#FFFFFF",
+		"backgroundColor": "#F5F5F7",
+		"app-plus": {
+			"titleNView": {
+				"buttons": []
+			}
+		}
+	}
+}

@@ -1,0 +1,26 @@
+{
+  "name": "exchange-rate-calculator",
+  "version": "1.0.0",
+  "description": "汇率速算 - 多币种汇率计算器",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "currency",
+    "exchange",
+    "rate",
+    "calculator"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "pinia": "^2.1.7",
+    "big.js": "^6.2.1",
+    "dayjs": "^1.11.10"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
+

@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    },
+    "types": [
+      "@dcloudio/types"
+    ],
+    "jsx": "preserve"
+  },
+  "exclude": [
+    "node_modules",
+    "unpackage",
+    "dist"
+  ],
+  "vueCompilerOptions": {
+    "experimentalCompatMode": 2,
+    "experimentalTemplateCompilerOptions": {
+      "whitespace": "preserve"
+    }
+  }
+}
+
