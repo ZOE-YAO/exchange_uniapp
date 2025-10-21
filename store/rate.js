@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { fetchExchangeRates } from '@/api/exchange'
+import defaultRatesData from '@/data/default-rates.js'
 
 export const useRateStore = defineStore('rate', {
 	state: () => ({
@@ -104,29 +105,25 @@ export const useRateStore = defineStore('rate', {
 			}
 		},
 		
-		// 加载默认汇率（内置数据）
-		async loadDefaultRates() {
-			try {
-				const defaultRates = await import('@/data/default-rates.js')
-				console.log('📦 默认汇率模块:', defaultRates)
-				
-				const data = defaultRates.default || defaultRates
-				console.log('📦 默认汇率数据:', data)
-				
-				this.rates = data.rates
-				this.base = data.base
-				this.lastUpdate = data.timestamp // 已经是毫秒
-				this.isOffline = true
-				
-				console.log('✅ 默认汇率加载成功:')
-				console.log('  - 基准货币:', this.base)
-				console.log('  - 汇率数量:', Object.keys(this.rates).length)
-				console.log('  - 前5个币种:', Object.keys(this.rates).slice(0, 5))
-			} catch (error) {
-				console.error('❌ 加载默认汇率失败:', error)
-				console.error('❌ 错误详情:', error.stack)
-			}
-		},
+	// 加载默认汇率（内置数据）
+	loadDefaultRates() {
+		try {
+			console.log('📦 加载默认汇率数据')
+			
+			this.rates = defaultRatesData.rates
+			this.base = defaultRatesData.base
+			this.lastUpdate = defaultRatesData.timestamp // 已经是毫秒
+			this.isOffline = true
+			
+			console.log('✅ 默认汇率加载成功:')
+			console.log('  - 基准货币:', this.base)
+			console.log('  - 汇率数量:', Object.keys(this.rates).length)
+			console.log('  - 前5个币种:', Object.keys(this.rates).slice(0, 5))
+		} catch (error) {
+			console.error('❌ 加载默认汇率失败:', error)
+			console.error('❌ 错误详情:', error.stack)
+		}
+	},
 		
 		// 保存到本地存储
 		saveToStorage() {
