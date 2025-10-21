@@ -1,7 +1,7 @@
 <template>
 	<view class="number-keyboard" v-if="visible">
 		<view class="keyboard-mask" @click="handleHide"></view>
-		<view class="keyboard-container">
+		<view class="keyboard-container" :class="{ 'shake-animation': isShaking }">
 			<view class="keyboard-header">
 				<text class="keyboard-title">{{ title }}</text>
 				<text class="keyboard-value">{{ displayValue }}</text>
@@ -86,10 +86,26 @@ const currentValue = ref(props.value)
 const operatorMode = ref(false) // 是否进入运算模式
 const firstNumber = ref('') // 第一个数字
 const operator = ref('') // 运算符
+const isShaking = ref(false) // 抖动状态
 
 watch(() => props.value, (newVal) => {
 	currentValue.value = newVal
 })
+
+// 触发抖动效果
+const triggerShake = () => {
+	isShaking.value = true
+	
+	// 触发震动反馈
+	// #ifdef APP-PLUS
+	uni.vibrateShort({ type: 'medium' })
+	// #endif
+	
+	// 300ms后取消抖动效果
+	setTimeout(() => {
+		isShaking.value = false
+	}, 300)
+}
 
 // 显示的值
 const displayValue = computed(() => {
@@ -105,7 +121,10 @@ const handleInput = (key) => {
 	
 	// 处理小数点
 	if (key === '.') {
-		if (newValue.includes('.')) return
+		if (newValue.includes('.')) {
+			triggerShake() // 已有小数点时抖动
+			return
+		}
 		if (!newValue) newValue = '0'
 	}
 	
@@ -113,12 +132,16 @@ const handleInput = (key) => {
 	if (newValue.includes('.')) {
 		const decimalPart = newValue.split('.')[1]
 		if (decimalPart && decimalPart.length >= props.maxDecimal) {
+			triggerShake() // 小数位达到上限时抖动
 			return
 		}
 	}
 	
 	// 检查最大长度
-	if (newValue.length >= props.maxLength) return
+	if (newValue.length >= props.maxLength) {
+		triggerShake() // 长度达到上限时抖动
+		return
+	}
 	
 	newValue += key
 	
@@ -134,7 +157,10 @@ const handleInput = (key) => {
 
 // 处理运算符
 const handleOperator = (op) => {
-	if (!currentValue.value || currentValue.value === '0') return
+	if (!currentValue.value || currentValue.value === '0') {
+		triggerShake() // 没有输入数字时抖动
+		return
+	}
 	
 	// 如果已经在运算模式，先计算之前的结果
 	if (operatorMode.value && firstNumber.value) {
@@ -146,7 +172,7 @@ const handleOperator = (op) => {
 	operatorMode.value = true
 	currentValue.value = ''
 	
-	// 可以在这里触发震动反馈
+	// 轻微震动反馈
 	// #ifdef APP-PLUS
 	uni.vibrateShort({ type: 'light' })
 	// #endif
@@ -344,6 +370,23 @@ const handleHide = () => {
 				}
 			}
 		}
+	}
+}
+
+/* 抖动动画 */
+.shake-animation {
+	animation: shake 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes shake {
+	0%, 100% {
+		transform: translateX(0);
+	}
+	10%, 30%, 50%, 70%, 90% {
+		transform: translateX(-8rpx);
+	}
+	20%, 40%, 60%, 80% {
+		transform: translateX(8rpx);
 	}
 }
 

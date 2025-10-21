@@ -1,5 +1,12 @@
 <template>
-	<view class="currency-card" @longpress="handleLongPress" :class="{ 'card-active': isActive }">
+	<view 
+		class="currency-card" 
+		:class="{ 'card-active': isActive }"
+		@touchstart="handleTouchStart"
+		@touchmove="handleTouchMove"
+		@touchend="handleTouchEnd"
+		@longpress="handleLongPress"
+	>
 		<!-- 顶部一行：国旗、货币名称、汇率 -->
 		<view class="card-header">
 			<view class="currency-basic">
@@ -16,7 +23,7 @@
 		</view>
 		
 		<!-- 输入框 -->
-		<view class="amount-input" @click="handleFocus">
+		<view class="amount-input">
 			<text class="currency-symbol">{{ currencyInfo.symbol }}</text>
 			<text class="amount-value" :class="{ 'amount-zero': !amount || amount === '0', 'amount-active': isActive && !isEditing, 'amount-editing': isShowingOldValue, 'amount-new-input': isEditing && !isShowingOldValue }">
 				{{ displayAmount }}
@@ -27,7 +34,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { formatNumberAbbr } from '@/utils/format'
 
 const props = defineProps({
@@ -71,6 +78,14 @@ const props = defineProps({
 
 const emit = defineEmits(['focus', 'delete', 'longpress'])
 
+// 手势处理状态
+const touchStartTime = ref(0)
+const touchStartPos = ref({ x: 0, y: 0 })
+const isTouchMoved = ref(false)
+const longPressTimer = ref(null)
+const MOVE_THRESHOLD = 10 // 移动阈值，超过此值认为是滑动
+const LONG_PRESS_DURATION = 600 // 长按时间阈值
+
 // 显示格式化的金额
 const displayAmount = computed(() => {
 	// 如果没有金额或为0，显示 0
@@ -103,9 +118,70 @@ const handleDelete = () => {
 	emit('delete', props.currencyInfo.code)
 }
 
-// 长按
+// 长按（只在没有滑动时触发）
 const handleLongPress = () => {
-	emit('longpress', props.currencyInfo.code)
+	if (!isTouchMoved.value) {
+		emit('longpress', props.currencyInfo.code)
+	}
+}
+
+// 触摸开始
+const handleTouchStart = (e) => {
+	touchStartTime.value = Date.now()
+	isTouchMoved.value = false
+	
+	const touch = e.touches[0]
+	touchStartPos.value = {
+		x: touch.pageX,
+		y: touch.pageY
+	}
+	
+	// 清除之前的长按定时器
+	if (longPressTimer.value) {
+		clearTimeout(longPressTimer.value)
+		longPressTimer.value = null
+	}
+}
+
+// 触摸移动
+const handleTouchMove = (e) => {
+	if (isTouchMoved.value) return
+	
+	const touch = e.touches[0]
+	const deltaX = Math.abs(touch.pageX - touchStartPos.value.x)
+	const deltaY = Math.abs(touch.pageY - touchStartPos.value.y)
+	
+	// 如果移动距离超过阈值，标记为滑动
+	if (deltaX > MOVE_THRESHOLD || deltaY > MOVE_THRESHOLD) {
+		isTouchMoved.value = true
+		
+		// 取消长按定时器
+		if (longPressTimer.value) {
+			clearTimeout(longPressTimer.value)
+			longPressTimer.value = null
+		}
+	}
+}
+
+// 触摸结束
+const handleTouchEnd = (e) => {
+	const touchEndTime = Date.now()
+	const touchDuration = touchEndTime - touchStartTime.value
+	
+	// 清除长按定时器
+	if (longPressTimer.value) {
+		clearTimeout(longPressTimer.value)
+		longPressTimer.value = null
+	}
+	
+	// 如果没有滑动且触摸时间较短，认为是点击
+	if (!isTouchMoved.value && touchDuration < LONG_PRESS_DURATION) {
+		handleFocus()
+	}
+	
+	// 重置状态
+	isTouchMoved.value = false
+	touchStartTime.value = 0
 }
 </script>
 

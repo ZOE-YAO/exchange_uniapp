@@ -1,30 +1,32 @@
 <template>
 	<view class="exchange-page">
-		<!-- 顶部更新信息栏 -->
-		<view class="update-bar">
-			<view class="update-info">
-				<text class="update-text">{{ formatUpdateDate }}</text>
-			</view>
-			
-			<!-- 基准货币选择器 -->
-			<view class="base-selector" @click="showBaseCurrencyPicker">
-				<text class="base-label">基准</text>
-				<text class="base-divider">|</text>
-				<text class="base-currency">{{ rateStore.base || 'USD' }}</text>
-				<text class="base-arrow">{{ showBaseModal ? '▲' : '▼' }}</text>
-			</view>
-		</view>
-		
-		<!-- 币种卡片列表 -->
+		<!-- 整页滚动容器 -->
 		<scroll-view 
-			class="currency-list"
+			class="page-scroll"
 			:class="{ 'keyboard-open': keyboardVisible }"
 			scroll-y
+			:scroll-top="scrollTop"
 			refresher-enabled
 			:refresher-triggered="isRefreshing"
 			@refresherrefresh="onPullDownRefresh"
 			@refresherrestore="onRefreshRestore"
 		>
+			<!-- 顶部更新信息栏 -->
+			<view class="update-bar">
+				<view class="update-info">
+					<text class="update-text">{{ formatUpdateDate }}</text>
+				</view>
+				
+				<!-- 基准货币选择器 -->
+				<view class="base-selector" @click="showBaseCurrencyPicker">
+					<text class="base-label">基准</text>
+					<text class="base-divider">|</text>
+					<text class="base-currency">{{ rateStore.base || 'USD' }}</text>
+					<text class="base-arrow">{{ showBaseModal ? '▲' : '▼' }}</text>
+				</view>
+			</view>
+			
+			<!-- 币种卡片列表 -->
 			<view class="currency-cards">
 				<currency-input
 					v-for="(code, index) in displayCurrencies"
@@ -47,6 +49,53 @@
 					<text class="add-icon">+</text>
 					<text class="add-text">{{ t('home.addCurrency') }}</text>
 				</view>
+				
+				<!-- 历史记录区域 -->
+				<view class="history-section" v-if="currencyStore.historyCount > 0">
+					<view class="history-header">
+						<text class="history-title">最近记录</text>
+						<view class="history-clear-btn" @click="clearHistory">
+							<text class="clear-text">清空</text>
+						</view>
+					</view>
+					
+					<view class="history-list">
+						<view 
+							v-for="record in currencyStore.queryHistory" 
+							:key="record.id"
+							class="history-item"
+							@click="restoreFromHistory(record)"
+						>
+							<!-- 第一排：货币符号 数值 → 货币符号 数值 -->
+							<view class="history-amounts">
+								<view class="amount-group">
+									<text class="currency-symbol">{{ getCurrencyInfo(record.fromCode).symbol }}</text>
+									<text class="amount-value">{{ formatHistoryAmount(record.fromAmount) }}</text>
+								</view>
+								<text class="conversion-arrow">→</text>
+								<view class="amount-group">
+									<text class="currency-symbol">{{ getCurrencyInfo(record.toCode).symbol }}</text>
+									<text class="amount-value">{{ formatHistoryAmount(record.toAmount) }}</text>
+								</view>
+							</view>
+							
+							<!-- 第二排：货币名｜货币代号 → 货币名｜货币代号 -->
+							<view class="history-names">
+								<view class="name-group">
+									<text class="currency-name">{{ getCurrencyInfo(record.fromCode).name }}</text>
+									<text class="name-divider">｜</text>
+									<text class="currency-code">{{ record.fromCode }}</text>
+								</view>
+								<text class="name-arrow">→</text>
+								<view class="name-group">
+									<text class="currency-name">{{ getCurrencyInfo(record.toCode).name }}</text>
+									<text class="name-divider">｜</text>
+									<text class="currency-code">{{ record.toCode }}</text>
+								</view>
+							</view>
+						</view>
+					</view>
+				</view>
 			</view>
 			
 			<!-- 空状态 -->
@@ -55,6 +104,14 @@
 				<text class="empty-text">请添加币种开始使用</text>
 			</view>
 		</scroll-view>
+		
+		<!-- 庆祝toast -->
+		<view class="celebration-toast" v-if="showCelebration">
+			<view class="toast-content">
+				<text class="toast-icon">🎉</text>
+				<text class="toast-text">汇率已更新</text>
+			</view>
+		</view>
 		
 		<!-- 计算器键盘 -->
 		<calculator-keyboard
@@ -91,7 +148,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useCurrencyStore } from '@/store/currency'
 import { useRateStore } from '@/store/rate'
 import { useSettingsStore } from '@/store/settings'
@@ -105,6 +162,9 @@ const currencyStore = useCurrencyStore()
 const rateStore = useRateStore()
 const settingsStore = useSettingsStore()
 
+// 滚动位置状态
+const scrollTop = ref(0)
+
 // 键盘状态
 const keyboardVisible = ref(false)
 const inputValue = ref('')
@@ -115,6 +175,9 @@ const isRefreshing = ref(false)
 
 // 基准货币选择
 const showBaseModal = ref(false)
+
+// 庆祝toast
+const showCelebration = ref(false)
 
 // 显示的币种列表（输入币种置顶，输入结束后保持第一位）
 const displayCurrencies = computed(() => {
@@ -270,15 +333,12 @@ const formatUpdateDate = computed(() => {
 	                date.getMonth() === now.getMonth() &&
 	                date.getFullYear() === now.getFullYear()
 	
-	const hours = String(date.getHours()).padStart(2, '0')
-	const minutes = String(date.getMinutes()).padStart(2, '0')
-	
 	if (isToday) {
-		return `今日汇率已更新 ${hours}:${minutes}`
+		return `今日汇率已更新`
 	} else {
 		const month = String(date.getMonth() + 1).padStart(2, '0')
 		const day = String(date.getDate()).padStart(2, '0')
-		return `汇率更新于 ${month}-${day} ${hours}:${minutes}`
+		return `汇率更新于 ${month}-${day}`
 	}
 })
 
@@ -294,10 +354,13 @@ const handleFocus = (code) => {
 	inputValue.value = '0'
 	keyboardVisible.value = true
 	
-	// 触发震动反馈
-	// #ifdef APP-PLUS
-	uni.vibrateShort({ type: 'light' })
-	// #endif
+	// 100ms延迟后滚动到页面顶部
+	setTimeout(() => {
+		scrollTop.value = scrollTop.value === 0 ? 1 : 0
+		nextTick(() => {
+			scrollTop.value = 0
+		})
+	}, 100)
 }
 
 // 处理数字键盘输入
@@ -336,6 +399,11 @@ const calculateOtherCurrencies = (fromCode, amount) => {
 	}
 	
 	console.log('💱 可用汇率:', Object.keys(rateStore.rates).slice(0, 5))
+	
+	// 记录历史（只记录输入货币与基准货币的兑换）
+	if (amount && parseFloat(amount) > 0 && fromCode !== rateStore.base) {
+		currencyStore.addQueryHistory(fromCode, amount, rateStore.base, rateStore.rates)
+	}
 	
 	currencyStore.selectedCurrencies.forEach(toCode => {
 		if (toCode !== fromCode) {
@@ -448,11 +516,13 @@ const handleRefresh = async () => {
 		const success = await rateStore.fetchRates()
 		
 		if (success) {
-			uni.showToast({
-				title: '汇率已更新',
-				icon: 'success',
-				duration: 1500
-			})
+			// 显示庆祝toast
+			showCelebration.value = true
+			
+			// 3秒后自动隐藏（包含动画时间）
+			setTimeout(() => {
+				showCelebration.value = false
+			}, 2500)
 			
 			// 如果有输入值，重新计算
 			if (currentInputCurrency.value && inputValue.value) {
@@ -550,6 +620,62 @@ uni.$on('currencySelected', () => {
 		calculateOtherCurrencies(currentInputCurrency.value, inputValue.value)
 	}
 })
+
+// 格式化历史记录中的金额显示
+const formatHistoryAmount = (amount) => {
+	const num = parseFloat(amount)
+	if (num >= 1000000) {
+		return (num / 1000000).toFixed(1) + 'M'
+	} else if (num >= 1000) {
+		return (num / 1000).toFixed(1) + 'K'
+	} else if (num >= 100) {
+		return num.toFixed(0)
+	} else if (num >= 1) {
+		return num.toFixed(2).replace(/\.?0+$/, '')
+	} else {
+		return num.toFixed(4).replace(/\.?0+$/, '')
+	}
+}
+
+// 从历史记录恢复查询
+const restoreFromHistory = (record) => {
+	console.log('📖 恢复历史记录:', record)
+	
+	const restoreData = currencyStore.restoreFromHistory(record)
+	
+	if (restoreData) {
+		// 设置为输入状态
+		currentInputCurrency.value = restoreData.targetCurrency
+		inputValue.value = restoreData.amount
+		keyboardVisible.value = true
+		
+		// 重新计算其他币种
+		calculateOtherCurrencies(restoreData.targetCurrency, restoreData.amount)
+		
+		// 触发震动反馈
+		// #ifdef APP-PLUS
+		uni.vibrateShort({ type: 'light' })
+		// #endif
+	}
+}
+
+// 清空历史记录
+const clearHistory = () => {
+	uni.showModal({
+		title: '提示',
+		content: '确定要清空所有历史记录吗？',
+		success: (res) => {
+			if (res.confirm) {
+				currencyStore.clearQueryHistory()
+				uni.showToast({
+					title: '已清空',
+					icon: 'success',
+					duration: 1500
+				})
+			}
+		}
+	})
+}
 </script>
 
 <style lang="scss" scoped>
@@ -566,8 +692,6 @@ uni.$on('currencySelected', () => {
 		padding: calc(env(safe-area-inset-top) + 16rpx) 24rpx 12rpx;
 		background: transparent;
 		z-index: 10;
-		position: sticky;
-		top: 0;
 		
 		.update-info {
 			flex: 1;
@@ -702,53 +826,253 @@ uni.$on('currencySelected', () => {
 		}
 	}
 	
-	.currency-list {
+	.page-scroll {
 		flex: 1;
-		padding: 0;
+		height: 100vh;
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		
 		&.keyboard-open {
 			// 键盘打开时，调整高度以适应键盘，保持可滚动
-			height: calc(100vh - 650rpx);
-			max-height: calc(100vh - 650rpx);
-			flex: 0 0 auto;
-			overflow-y: scroll;
+			height: calc(100vh - 520rpx);
+			max-height: calc(100vh - 520rpx);
+		}
+	}
+	
+	.currency-cards {
+		padding: 12rpx 24rpx 120rpx 24rpx;
+	}
+	
+	.add-currency-btn {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		gap: 12rpx;
+		padding: 24rpx 32rpx;
+		background: var(--bg-card);
+		border-radius: 16rpx;
+		border: 2rpx dashed #e0e0e0;
+		margin: 0 0 16rpx 0;
+		transition: all 0.3s;
+		box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+		
+		&:active {
+			transform: scale(0.98);
+			background: var(--bg-active);
 		}
 		
-		.currency-cards {
-			padding: 12rpx 24rpx 120rpx 24rpx;
+		.add-icon {
+			font-size: 32rpx;
+			color: var(--color-primary);
+			line-height: 1;
 		}
 		
-		.add-currency-btn {
+		.add-text {
+			font-size: 28rpx;
+			color: var(--text-secondary);
+		}
+	}
+	
+	// 历史记录区域
+	.history-section {
+		margin: 32rpx 0 16rpx 0;
+		
+		.history-header {
 			display: flex;
-			flex-direction: column;
 			align-items: center;
-			justify-content: center;
-			padding: 48rpx 32rpx;
-			background: var(--bg-card);
-			border-radius: 20rpx;
-			border: 2rpx dashed #e0e0e0;
-			margin: 0 0 16rpx 0;
-			transition: all 0.3s;
+			justify-content: space-between;
+			margin-bottom: 16rpx;
+			padding: 0 8rpx;
 			
-			&:active {
-				transform: scale(0.98);
-				background: var(--bg-active);
+			.history-title {
+				font-size: 32rpx;
+				font-weight: 600;
+				color: var(--text-primary);
 			}
 			
-			.add-icon {
-				font-size: 64rpx;
-				color: var(--color-primary);
-				line-height: 1;
-				margin-bottom: 12rpx;
-			}
-			
-			.add-text {
-				font-size: 28rpx;
-				color: var(--text-secondary);
+			.history-clear-btn {
+				background: #f5f5f7;
+				border-radius: 16rpx;
+				padding: 8rpx 16rpx;
+				transition: all 0.3s;
+				
+				&:active {
+					background: #e8e8ed;
+					transform: scale(0.95);
+				}
+				
+				.clear-text {
+					font-size: 24rpx;
+					color: var(--text-secondary);
+					font-weight: 500;
+				}
 			}
 		}
+		
+		.history-list {
+			.history-item {
+				background: var(--bg-card);
+				border-radius: 16rpx;
+				padding: 20rpx 24rpx;
+				margin: 0 0 20rpx 0;
+				transition: all 0.3s;
+				box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+				
+				&:active {
+					transform: scale(0.98);
+					background: var(--bg-active);
+				}
+				
+				&:last-child {
+					margin-bottom: 0;
+				}
+				
+				// 第一排：货币符号和数值
+				.history-amounts {
+					display: flex;
+					align-items: center;
+					margin-bottom: 8rpx;
+					
+					.amount-group {
+						display: flex;
+						align-items: center;
+						gap: 8rpx;
+						
+						.currency-symbol {
+							font-size: 28rpx;
+							font-weight: 600;
+							color: var(--text-secondary);
+						}
+						
+						.amount-value {
+							font-size: 28rpx;
+							font-weight: 600;
+							color: var(--text-primary);
+						}
+					}
+					
+					.conversion-arrow {
+						font-size: 24rpx;
+						color: var(--text-secondary);
+						font-weight: bold;
+						margin: 0 8rpx;
+					}
+				}
+				
+				// 第二排：货币名称和代号
+				.history-names {
+					display: flex;
+					align-items: center;
+					
+					.name-group {
+						display: flex;
+						align-items: center;
+						gap: 4rpx;
+						
+						.currency-name {
+							font-size: 22rpx;
+							color: #999;
+						}
+						
+						.name-divider {
+							font-size: 22rpx;
+							color: #999;
+						}
+						
+						.currency-code {
+							font-size: 22rpx;
+							color: #999;
+							font-weight: 500;
+						}
+					}
+					
+					.name-arrow {
+						font-size: 20rpx;
+						color: var(--text-secondary);
+						margin: 0 8rpx;
+					}
+				}
+			}
+		}
+	}
+	
+	.empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 120rpx 32rpx;
+		
+		.empty-icon {
+			font-size: 120rpx;
+			margin-bottom: 32rpx;
+			opacity: 0.5;
+		}
+		
+		.empty-text {
+			font-size: 28rpx;
+			color: var(--text-secondary);
+		}
+	}
+	
+	// 庆祝toast
+	.celebration-toast {
+		position: fixed;
+		top: calc(env(safe-area-inset-top) + 20rpx);
+		left: 0;
+		right: 0;
+		z-index: 9999;
+		pointer-events: none;
+		display: flex;
+		justify-content: center;
+		
+		.toast-content {
+			display: flex;
+			align-items: center;
+			gap: 12rpx;
+			padding: 16rpx 32rpx;
+			background: rgba(255, 255, 255, 0.95);
+			border-radius: 50rpx;
+			box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.15);
+			backdrop-filter: blur(10rpx);
+			border: 1rpx solid rgba(255, 255, 255, 0.3);
+			animation: celebrationSlideIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+			
+			.toast-icon {
+				font-size: 36rpx;
+				animation: celebrationBounce 0.8s ease-in-out 0.3s;
+			}
+			
+			.toast-text {
+				font-size: 28rpx;
+				font-weight: 600;
+				color: #333;
+			}
+		}
+	}
+}
+
+@keyframes celebrationSlideIn {
+	0% {
+		opacity: 0;
+		transform: translateY(-40rpx) scale(0.8);
+	}
+	100% {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+@keyframes celebrationBounce {
+	0%, 20%, 50%, 80%, 100% {
+		transform: translateY(0);
+	}
+	40% {
+		transform: translateY(-8rpx);
+	}
+	60% {
+		transform: translateY(-4rpx);
 	}
 }
 

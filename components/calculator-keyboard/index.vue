@@ -104,11 +104,11 @@ const props = defineProps({
 	},
 	maxValue: {
 		type: Number,
-		default: 1000000000000000 // 百万亿（千万亿）
+		default: 1000000000000 // 万亿
 	},
 	maxDecimal: {
 		type: Number,
-		default: 8
+		default: 2
 	}
 })
 
@@ -151,10 +151,12 @@ const checkOtherCurrenciesLimit = (inputValue) => {
 const triggerShake = () => {
 	isShaking.value = true
 	// 震动反馈
+	// #ifdef APP-PLUS
 	uni.vibrateShort({ type: 'heavy' })
+	// #endif
 	setTimeout(() => {
 		isShaking.value = false
-	}, 500)
+	}, 300)
 }
 
 watch(() => props.value, (newVal) => {
@@ -164,30 +166,37 @@ watch(() => props.value, (newVal) => {
 	}
 }, { immediate: true })
 
+// 监听 displayValue 变化，实时更新到父组件
+watch(() => displayValue.value, (newDisplayValue) => {
+	// 实时同步显示值到父组件
+	emit('update:value', newDisplayValue)
+	emit('input', newDisplayValue)
+})
+
 // 完整表达式（用于小字显示）- 显示实际输入内容
 const fullExpression = computed(() => {
+	// 如果只有当前值，没有表达式，不显示小字（只显示输入的数字）
 	if (!expression.value) {
-		return '' // 没有表达式时不显示
+		return ''
 	}
+	
 	// 如果正在等待输入操作数，只显示表达式（带运算符）
 	if (waitingForOperand.value) {
 		return expression.value
 	}
-	// 否则显示表达式+当前输入的值
+	
+	// 如果有表达式，显示完整的表达式+当前输入的值
 	return expression.value + (currentValue.value || '')
 })
 
-// 实时计算结果（用于大字显示）
+// 显示值（用于大字显示）
 const displayValue = computed(() => {
-	// 如果有表达式且有当前值，计算实时结果
-	if (expression.value && currentValue.value && currentValue.value !== '0') {
-		const fullExpr = expression.value + currentValue.value
-		const result = evaluateExpression(fullExpr)
-		if (result !== null) {
-			return result.toString()
-		}
+	// 如果没有任何输入，显示0
+	if (!currentValue.value && !expression.value) {
+		return '0'
 	}
-	// 否则显示当前输入的值
+	
+	// 直接显示当前输入的值
 	return currentValue.value || '0'
 })
 
@@ -203,6 +212,11 @@ const handleInput = (key) => {
 	
 	// 如果当前值是 '0' 或空，且输入的不是小数点，则直接替换（从头开始输入）
 	if ((newValue === '0' || newValue === '') && key !== '.') {
+		// 输入0时触发抖动
+		if (key === '0' || key === '00') {
+			triggerShake()
+			return
+		}
 		newValue = key
 		currentValue.value = newValue
 		emitValue()
@@ -211,20 +225,27 @@ const handleInput = (key) => {
 	
 	// 处理小数点
 	if (key === '.') {
-		if (newValue.includes('.')) return
+		if (newValue.includes('.')) {
+			triggerShake() // 已有小数点时抖动
+			return
+		}
 		if (!newValue) newValue = '0'
 	}
 	
-	// 如果有小数点，限制最多2位小数
+	// 如果有小数点，限制小数位数
 	if (newValue.includes('.')) {
 		const decimalPart = newValue.split('.')[1]
-		if (decimalPart && decimalPart.length >= 2) {
+		if (decimalPart && decimalPart.length >= props.maxDecimal) {
+			triggerShake() // 小数位达到上限时抖动
 			return
 		}
 	}
 	
 	// 检查最大长度
-	if (newValue.length >= props.maxLength) return
+	if (newValue.length >= props.maxLength) {
+		triggerShake() // 长度达到上限时抖动
+		return
+	}
 	
 	newValue += key
 	
@@ -252,7 +273,10 @@ const handleInput = (key) => {
 
 // 处理运算符
 const handleOperator = (op) => {
-	if (!currentValue.value || currentValue.value === '0') return
+	if (!currentValue.value || currentValue.value === '0') {
+		triggerShake() // 没有输入数字时抖动
+		return
+	}
 	
 	// 如果表达式为空，开始新表达式
 	if (!expression.value) {
@@ -264,13 +288,15 @@ const handleOperator = (op) => {
 			// 替换最后一个运算符
 			expression.value = expression.value.slice(0, -1) + op
 		} else {
-			// 如果表达式已存在且有新的操作数，先计算当前结果，然后添加新运算符
+			// 如果表达式已存在且有新的操作数，先计算前面的结果
 			const fullExpr = expression.value + currentValue.value
 			const result = evaluateExpression(fullExpr)
-			if (result !== null) {
+			if (result !== null && !isNaN(result)) {
+				// 用计算结果作为新的当前值，并开始新的表达式
 				currentValue.value = result.toString()
 				expression.value = currentValue.value + op
 				waitingForOperand.value = true
+				// 立即同步计算结果到父组件
 				emitValue()
 			}
 		}
@@ -294,8 +320,8 @@ const evaluateExpression = (expr) => {
 		// 使用 Function 构造器安全计算
 		const result = new Function('return ' + jsExpr)()
 		
-		// 保留合理的小数位数
-		return parseFloat(result.toFixed(8))
+		// 保留2位小数
+		return parseFloat(result.toFixed(2))
 	} catch (error) {
 		console.error('表达式计算错误:', error)
 		return null
@@ -306,14 +332,15 @@ const evaluateExpression = (expr) => {
 const handleCalculate = () => {
 	if (!expression.value || !currentValue.value) return
 	
-	const fullExpression = expression.value + currentValue.value
-	console.log('计算表达式:', fullExpression)
+	const fullExpressionText = expression.value + currentValue.value
+	console.log('计算表达式:', fullExpressionText)
 	
-	const result = evaluateExpression(fullExpression)
+	const result = evaluateExpression(fullExpressionText)
 	
 	if (result !== null) {
+		// 计算完成后，清空表达式，保留结果
 		currentValue.value = result.toString()
-		expression.value = '' // 清空表达式
+		expression.value = ''
 		waitingForOperand.value = false
 		emitValue()
 		
@@ -326,8 +353,19 @@ const handleCalculate = () => {
 
 // 处理删除
 const handleDelete = () => {
+	// 如果等待操作数状态，删除表达式的最后一个字符（运算符）
+	if (waitingForOperand.value && expression.value) {
+		expression.value = expression.value.slice(0, -1)
+		if (!expression.value) {
+			waitingForOperand.value = false
+		}
+		return
+	}
+	
+	// 否则删除当前值的最后一个字符
 	if (currentValue.value) {
 		currentValue.value = currentValue.value.slice(0, -1)
+		// 如果删除完了，不要设为0，保持空字符串
 		emitValue()
 	}
 }
@@ -342,8 +380,10 @@ const handleClear = () => {
 
 // 发送值更新
 const emitValue = () => {
-	emit('update:value', currentValue.value)
-	emit('input', currentValue.value)
+	// 发送显示值给父组件
+	const valueToEmit = displayValue.value
+	emit('update:value', valueToEmit)
+	emit('input', valueToEmit)
 }
 
 // 隐藏键盘
@@ -382,21 +422,21 @@ const handleHide = () => {
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
-		border-radius: 20rpx 20rpx 0 0;
+		background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+		border-radius: 24rpx 24rpx 0 0;
 		animation: slideUp 0.3s ease-out;
 		padding-bottom: constant(safe-area-inset-bottom);
 		padding-bottom: env(safe-area-inset-bottom);
-		box-shadow: 0 -4rpx 24rpx rgba(0, 0, 0, 0.1);
+		box-shadow: 0 -8rpx 32rpx rgba(0, 0, 0, 0.15), 0 -2rpx 8rpx rgba(0, 0, 0, 0.08);
 		
 		&.shake {
-			animation: shake 0.5s ease-in-out;
+			animation: shake 0.3s ease-in-out;
 		}
 	}
 	
 	.display-area {
 		padding: 24rpx 32rpx 20rpx;
-		background: #fff;
+		background: #ffffff;
 		border-bottom: 1rpx solid #e8e8ed;
 		display: flex;
 		align-items: center;
@@ -471,85 +511,89 @@ const handleHide = () => {
 			.key {
 				flex: 1;
 				height: 96rpx;
-				background: #fff;
-				border-radius: 16rpx;
+				background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+				border-radius: 18rpx;
+				border: 1rpx solid rgba(0, 0, 0, 0.04);
 				display: flex;
 				align-items: center;
 				justify-content: center;
 				font-size: 40rpx;
-				color: #333;
+				color: #1e293b;
 				font-weight: 500;
-				box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+				box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08), 0 1rpx 3rpx rgba(0, 0, 0, 0.04);
 				transition: all 0.2s;
 				
 				&:active {
 					transform: scale(0.95);
-					background: #f0f0f0;
+					background: linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%);
+					box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.1);
 				}
 				
 				&.key-operator {
-					background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-					color: #fff;
+					background: #f5f5f5;
+					color: #666;
 					font-weight: 600;
-					box-shadow: 0 4rpx 12rpx rgba(102, 126, 234, 0.3);
+					border: 1rpx solid #e0e0e0;
 					
 					&:active {
-						background: linear-gradient(135deg, #556dd9 0%, #653a91 100%);
-						box-shadow: 0 2rpx 8rpx rgba(102, 126, 234, 0.2);
+						background: #e8e8e8;
 					}
 				}
 				
 				&.key-close {
-					background: #e8e8ed;
+					background: linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%);
+					border: 1rpx solid rgba(148, 163, 184, 0.2);
 					
 					.key-text {
 						font-size: 24rpx;
-						color: #666;
+						color: #64748b;
 					}
 					
 					&:active {
-						background: #d8d8dd;
+						background: linear-gradient(145deg, #e2e8f0 0%, #cbd5e1 100%);
 					}
 				}
 				
 				&.key-clear {
-					background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-					box-shadow: 0 4rpx 12rpx rgba(245, 87, 108, 0.3);
+					background: #e3f2fd;
+					color: #1976d2;
+					border: 1rpx solid #bbdefb;
 					
 					.key-text {
 						font-size: 26rpx;
-						color: #fff;
+						color: #1976d2;
 						font-weight: 600;
 					}
 					
 					&:active {
-						background: linear-gradient(135deg, #e082ea 0%, #e4465b 100%);
-						box-shadow: 0 2rpx 8rpx rgba(245, 87, 108, 0.2);
+						background: #d1e7ff;
 					}
 				}
 				
 				&.key-delete {
-					background: #e8e8ed;
+					background: linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%);
+					border: 1rpx solid rgba(148, 163, 184, 0.2);
 					
 					.key-icon {
 						font-size: 32rpx;
-						color: #666;
+						color: #64748b;
 					}
 					
 					&:active {
-						background: #d8d8dd;
+						background: linear-gradient(145deg, #e2e8f0 0%, #cbd5e1 100%);
 					}
 				}
 				
 				&.key-equal {
-					background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+					background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
 					color: #fff;
 					font-weight: 600;
-					box-shadow: 0 4rpx 12rpx rgba(67, 233, 123, 0.3);
+					box-shadow: 0 6rpx 16rpx rgba(25, 118, 210, 0.3), 0 2rpx 4rpx rgba(25, 118, 210, 0.2);
+					border: 1rpx solid rgba(21, 101, 192, 0.2);
 					
 					&:active {
-						background: linear-gradient(135deg, #32d86a 0%, #27e8c6 100%);
-						box-shadow: 0 2rpx 8rpx rgba(67, 233, 123, 0.2);
+						background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+						box-shadow: 0 3rpx 8rpx rgba(25, 118, 210, 0.4);
 					}
 				}
 			}
@@ -570,11 +614,11 @@ const handleHide = () => {
 	0%, 100% {
 		transform: translateX(0);
 	}
-	10%, 30%, 50%, 70%, 90% {
-		transform: translateX(-8rpx);
+	25% {
+		transform: translateX(-4rpx);
 	}
-	20%, 40%, 60%, 80% {
-		transform: translateX(8rpx);
+	75% {
+		transform: translateX(4rpx);
 	}
 }
 </style>

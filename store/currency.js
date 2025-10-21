@@ -15,7 +15,10 @@ export const useCurrencyStore = defineStore('currency', {
 		activeCurrency: '',
 		
 		// 最后一次输入的币种（用于保持置顶）
-		lastInputCurrency: ''
+		lastInputCurrency: '',
+		
+		// 历史查询记录（最多10条）
+		queryHistory: []
 	}),
 	
 	getters: {
@@ -25,7 +28,10 @@ export const useCurrencyStore = defineStore('currency', {
 		// 检查币种是否已选
 		isSelected: (state) => (code) => {
 			return state.selectedCurrencies.includes(code)
-		}
+		},
+		
+		// 获取历史记录数量
+		historyCount: (state) => state.queryHistory.length
 	},
 	
 	actions: {
@@ -100,6 +106,9 @@ export const useCurrencyStore = defineStore('currency', {
 				if (lastInput) {
 					this.lastInputCurrency = lastInput
 				}
+				
+				// 加载历史记录
+				this.loadHistoryFromStorage()
 			} catch (error) {
 				console.error('加载币种数据失败:', error)
 			}
@@ -112,6 +121,94 @@ export const useCurrencyStore = defineStore('currency', {
 				uni.setStorageSync('lastInputCurrency', code)
 			} catch (error) {
 				console.error('保存最后输入货币失败:', error)
+			}
+		},
+		
+		// 添加查询历史记录（只记录与基准货币的兑换）
+		addQueryHistory(fromCode, fromAmount, baseCode, rates) {
+			// 只记录输入货币与基准货币的兑换关系
+			if (fromCode === baseCode) return // 如果输入的就是基准货币，不记录
+			
+			const timestamp = Date.now()
+			const fromRate = rates[fromCode] || 1
+			const baseAmount = (parseFloat(fromAmount) / fromRate).toString()
+			
+			const record = {
+				id: timestamp,
+				fromCode,
+				fromAmount: parseFloat(fromAmount).toString(),
+				toCode: baseCode, 
+				toAmount: baseAmount,
+				timestamp
+			}
+			
+			// 检查是否有相同的记录（相同的转换对和相似金额）
+			const existingIndex = this.queryHistory.findIndex(item => 
+				item.fromCode === fromCode && 
+				item.toCode === baseCode && 
+				Math.abs(parseFloat(item.fromAmount) - parseFloat(fromAmount)) < 0.01
+			)
+			
+			if (existingIndex > -1) {
+				// 如果已存在相似记录，更新时间戳并移到最前面
+				this.queryHistory.splice(existingIndex, 1)
+			}
+			
+			// 添加到最前面
+			this.queryHistory.unshift(record)
+			
+			// 保持最多10条记录
+			if (this.queryHistory.length > 10) {
+				this.queryHistory = this.queryHistory.slice(0, 10)
+			}
+			
+			this.saveHistoryToStorage()
+		},
+		
+		// 清空查询历史
+		clearQueryHistory() {
+			this.queryHistory = []
+			this.saveHistoryToStorage()
+		},
+		
+		// 根据历史记录快速恢复查询
+		restoreFromHistory(record) {
+			// 确保两个币种都已选择
+			if (!this.isSelected(record.fromCode)) {
+				this.addCurrency(record.fromCode)
+			}
+			if (!this.isSelected(record.toCode)) {
+				this.addCurrency(record.toCode)
+			}
+			
+			// 恢复金额
+			this.updateAmount(record.fromCode, record.fromAmount)
+			
+			// 触发重新计算其他币种
+			return {
+				targetCurrency: record.fromCode,
+				amount: record.fromAmount
+			}
+		},
+		
+		// 保存历史记录到本地存储
+		saveHistoryToStorage() {
+			try {
+				uni.setStorageSync('queryHistory', this.queryHistory)
+			} catch (error) {
+				console.error('保存查询历史失败:', error)
+			}
+		},
+		
+		// 从本地存储加载历史记录
+		loadHistoryFromStorage() {
+			try {
+				const history = uni.getStorageSync('queryHistory')
+				if (history && Array.isArray(history)) {
+					this.queryHistory = history
+				}
+			} catch (error) {
+				console.error('加载查询历史失败:', error)
 			}
 		}
 	}
