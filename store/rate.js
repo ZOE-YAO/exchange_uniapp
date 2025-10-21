@@ -90,13 +90,13 @@ export const useRateStore = defineStore('rate', {
 				console.error('错误堆栈:', error.stack)
 				
 				// 先尝试使用缓存数据
-				const hasCached = this.loadFromStorage()
-				
-				if (!hasCached || !this.hasRates) {
-					// 如果没有缓存，使用默认汇率
-					console.log('📦 加载内置默认汇率数据')
-					await this.loadDefaultRates()
-				}
+			const hasCached = this.loadFromStorage()
+			
+			if (!hasCached || !this.hasRates) {
+				// 如果没有缓存，使用默认汇率
+				console.log('📦 加载内置默认汇率数据')
+				this.loadDefaultRates()
+			}
 				
 				this.isOffline = true
 				return false
