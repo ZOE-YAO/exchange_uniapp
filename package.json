@@ -31,9 +31,6 @@
   },
   "devDependencies": {
     "@dcloudio/types": "^3.4.8",
-    "@dcloudio/uni-cli-shared": "^3.0.0-4020420240930001",
-    "@dcloudio/vite-plugin-uni": "^3.0.0-4020420240930001",
-    "vite": "5.2.8",
     "sass": "^1.77.6"
   },
   "engines": {
