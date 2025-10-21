@@ -8,15 +8,22 @@ export default defineConfig({
   ],
   build: {
     // 针对 App 平台的构建配置
-    rollupOptions: {
-      output: {
-        // 移除不支持的 format 配置，使用默认值
-        manualChunks: undefined,
-      }
-    },
-    // 禁用代码分割以支持 App 平台
+    target: 'es2015',
     minify: 'terser',
     cssCodeSplit: false,
+    // 完全禁用代码分割
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+        inlineDynamicImports: true,
+      }
+    },
+    // 优化配置
+    chunkSizeWarningLimit: 1500,
+    assetsInlineLimit: 4096,
+  },
+  optimizeDeps: {
+    exclude: ['vue-demi']
   },
   server: {
     port: 8080,

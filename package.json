@@ -27,7 +27,18 @@
   "dependencies": {
     "pinia": "^2.1.7",
     "big.js": "^6.2.1",
-    "dayjs": "^1.11.10"
+    "dayjs": "^1.11.10",
+    "@dcloudio/uni-app": "3.0.0-alpha-4010520231122001",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "^3.4.8",
+    "@dcloudio/uni-cli-shared": "3.0.0-alpha-4010520231122001",
+    "@dcloudio/uni-stacktracey": "3.0.0-alpha-4010520231122001",
+    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-4010520231122001",
+    "vite": "^5.2.8",
+    "@vitejs/plugin-vue": "^5.0.4"
   },
   "engines": {
     "node": ">=14.0.0"

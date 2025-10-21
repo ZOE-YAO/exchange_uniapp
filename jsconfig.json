@@ -4,10 +4,6 @@
     "paths": {
       "@/*": ["./*"]
     },
-    "types": [
-      "@dcloudio/types",
-      "node"
-    ],
     "jsx": "preserve",
     "module": "ESNext",
     "moduleResolution": "Node",
