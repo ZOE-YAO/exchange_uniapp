@@ -6,25 +6,8 @@ export default defineConfig({
   plugins: [
     uni(),
   ],
-  build: {
-    // 针对 App 平台的构建配置
-    target: 'es2015',
-    minify: 'terser',
-    cssCodeSplit: false,
-    // 完全禁用代码分割
-    rollupOptions: {
-      output: {
-        manualChunks: undefined,
-        inlineDynamicImports: true,
-      }
-    },
-    // 优化配置
-    chunkSizeWarningLimit: 1500,
-    assetsInlineLimit: 4096,
-  },
-  optimizeDeps: {
-    exclude: ['vue-demi']
-  },
+  // 不自定义 build.rollupOptions.output.format
+  // 让 UniApp 插件自动处理所有构建配置
   server: {
     port: 8080,
     host: '0.0.0.0',
