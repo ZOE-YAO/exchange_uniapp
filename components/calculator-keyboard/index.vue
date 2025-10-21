@@ -1,74 +1,65 @@
 <template>
 	<view class="calculator-keyboard" v-if="visible">
 		<view class="keyboard-mask" @click="handleHide"></view>
-		<view class="keyboard-container">
-			<!-- 标题栏 -->
-			<view class="keyboard-header">
-				<text class="keyboard-title">{{ title }}</text>
-				<view class="close-btn" @click="handleHide">
-					<text class="close-icon">×</text>
-				</view>
-			</view>
-			
+		<view class="keyboard-container" :class="{ 'shake': isShaking }">
 			<!-- 显示区域（支持表达式） -->
 			<view class="display-area">
 				<view class="currency-flag-left">{{ currentCurrency?.flag || '🌍' }}</view>
 				<view class="display-values">
-					<text class="expression-text" v-if="expression">{{ expression }}</text>
+					<text class="expression-text" v-if="fullExpression">{{ fullExpression }}</text>
 					<text class="display-value">{{ displayValue || '0' }}</text>
 				</view>
 			</view>
 			
 			<!-- 键盘主体 -->
 			<view class="keyboard-body">
-				<!-- 左侧：数字区域 -->
-				<view class="number-area">
-					<!-- 第一行：7 8 9 -->
+				<!-- 数字和运算符区域 -->
+				<view class="main-area">
+					<!-- 第一行：7 8 9 + -->
 					<view class="key-row">
 						<view class="key" @click="handleInput('7')">7</view>
 						<view class="key" @click="handleInput('8')">8</view>
 						<view class="key" @click="handleInput('9')">9</view>
+						<view class="key key-operator" @click="handleOperator('+')">+</view>
 					</view>
 					
-					<!-- 第二行：4 5 6 -->
+					<!-- 第二行：4 5 6 - -->
 					<view class="key-row">
 						<view class="key" @click="handleInput('4')">4</view>
 						<view class="key" @click="handleInput('5')">5</view>
 						<view class="key" @click="handleInput('6')">6</view>
+						<view class="key key-operator" @click="handleOperator('-')">−</view>
 					</view>
 					
-					<!-- 第三行：1 2 3 -->
+					<!-- 第三行：1 2 3 × -->
 					<view class="key-row">
 						<view class="key" @click="handleInput('1')">1</view>
 						<view class="key" @click="handleInput('2')">2</view>
 						<view class="key" @click="handleInput('3')">3</view>
+						<view class="key key-operator" @click="handleOperator('×')">×</view>
 					</view>
 					
-					<!-- 第四行：00 0 . -->
+					<!-- 第四行：00 0 . ÷ -->
 					<view class="key-row">
 						<view class="key" @click="handleInput('00')">00</view>
-						<view class="key key-zero" @click="handleInput('0')">0</view>
+						<view class="key" @click="handleInput('0')">0</view>
 						<view class="key" @click="handleInput('.')">.</view>
+						<view class="key key-operator" @click="handleOperator('÷')">÷</view>
 					</view>
 					
-					<!-- 第五行：← C -->
+					<!-- 底部一排：关闭、清空、删除、等于 -->
 					<view class="key-row bottom-row">
-						<view class="key key-function" @click="handleDelete">
-							<text class="key-icon">←</text>
+						<view class="key key-close" @click="handleHide">
+							<text class="key-text">关闭</text>
 						</view>
-						<view class="key key-function" @click="handleClear">
+						<view class="key key-clear" @click="handleClear">
 							<text class="key-text">清空</text>
 						</view>
+						<view class="key key-delete" @click="handleDelete">
+							<text class="key-icon">←</text>
+						</view>
+						<view class="key key-equal" @click="handleCalculate">=</view>
 					</view>
-				</view>
-				
-				<!-- 右侧：运算符区域 -->
-				<view class="operator-area">
-					<view class="operator-key" @click="handleOperator('+')">+</view>
-					<view class="operator-key" @click="handleOperator('-')">−</view>
-					<view class="operator-key" @click="handleOperator('×')">×</view>
-					<view class="operator-key" @click="handleOperator('÷')">÷</view>
-					<view class="operator-key operator-equal" @click="handleCalculate">=</view>
 				</view>
 			</view>
 		</view>
@@ -95,9 +86,25 @@ const props = defineProps({
 		type: Object,
 		default: () => ({})
 	},
+	allCurrencies: {
+		type: Array,
+		default: () => []
+	},
+	baseCurrency: {
+		type: String,
+		default: 'CNY'
+	},
+	rates: {
+		type: Object,
+		default: () => ({})
+	},
 	maxLength: {
 		type: Number,
 		default: 16
+	},
+	maxValue: {
+		type: Number,
+		default: 1000000000000000 // 百万亿（千万亿）
 	},
 	maxDecimal: {
 		type: Number,
@@ -110,6 +117,45 @@ const emit = defineEmits(['update:visible', 'update:value', 'input', 'close', 'h
 const currentValue = ref('')
 const expression = ref('') // 当前表达式
 const waitingForOperand = ref(false) // 是否等待下一个操作数
+const isShaking = ref(false) // 微动效状态
+
+// 检查是否有其他币种会超过上限
+const checkOtherCurrenciesLimit = (inputValue) => {
+	if (!props.currentCurrency?.code || !props.rates || !props.allCurrencies?.length) {
+		return false
+	}
+	
+	const numValue = parseFloat(inputValue)
+	if (isNaN(numValue)) return false
+	
+	// 获取当前货币的汇率
+	const currentCode = props.currentCurrency.code
+	const currentRate = props.rates[currentCode] || 1
+	
+	// 检查每个其他货币
+	for (const currency of props.allCurrencies) {
+		if (currency.code === currentCode) continue
+		
+		const targetRate = props.rates[currency.code] || 1
+		const convertedValue = numValue * (targetRate / currentRate)
+		
+		if (convertedValue > props.maxValue) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// 触发微动效
+const triggerShake = () => {
+	isShaking.value = true
+	// 震动反馈
+	uni.vibrateShort({ type: 'heavy' })
+	setTimeout(() => {
+		isShaking.value = false
+	}, 500)
+}
 
 watch(() => props.value, (newVal) => {
 	if (newVal !== currentValue.value) {
@@ -118,8 +164,30 @@ watch(() => props.value, (newVal) => {
 	}
 }, { immediate: true })
 
-// 显示的值
+// 完整表达式（用于小字显示）- 显示实际输入内容
+const fullExpression = computed(() => {
+	if (!expression.value) {
+		return '' // 没有表达式时不显示
+	}
+	// 如果正在等待输入操作数，只显示表达式（带运算符）
+	if (waitingForOperand.value) {
+		return expression.value
+	}
+	// 否则显示表达式+当前输入的值
+	return expression.value + (currentValue.value || '')
+})
+
+// 实时计算结果（用于大字显示）
 const displayValue = computed(() => {
+	// 如果有表达式且有当前值，计算实时结果
+	if (expression.value && currentValue.value && currentValue.value !== '0') {
+		const fullExpr = expression.value + currentValue.value
+		const result = evaluateExpression(fullExpr)
+		if (result !== null) {
+			return result.toString()
+		}
+	}
+	// 否则显示当前输入的值
 	return currentValue.value || '0'
 })
 
@@ -147,10 +215,10 @@ const handleInput = (key) => {
 		if (!newValue) newValue = '0'
 	}
 	
-	// 如果有小数点，检查小数位数
+	// 如果有小数点，限制最多2位小数
 	if (newValue.includes('.')) {
 		const decimalPart = newValue.split('.')[1]
-		if (decimalPart && decimalPart.length >= props.maxDecimal) {
+		if (decimalPart && decimalPart.length >= 2) {
 			return
 		}
 	}
@@ -159,6 +227,19 @@ const handleInput = (key) => {
 	if (newValue.length >= props.maxLength) return
 	
 	newValue += key
+	
+	// 检查是否超过最大值
+	const numValue = parseFloat(newValue)
+	if (!isNaN(numValue) && numValue > props.maxValue) {
+		triggerShake()
+		return
+	}
+	
+	// 检查其他币种是否会超过上限
+	if (checkOtherCurrenciesLimit(newValue)) {
+		triggerShake()
+		return
+	}
 	
 	// 去除开头多余的0（如果后面不是小数点）
 	while (newValue.length > 1 && newValue[0] === '0' && newValue[1] !== '.') {
@@ -173,18 +254,27 @@ const handleInput = (key) => {
 const handleOperator = (op) => {
 	if (!currentValue.value || currentValue.value === '0') return
 	
-	// 将当前值添加到表达式
-	if (expression.value && !expression.value.endsWith(' ')) {
-		// 如果表达式存在且不以空格结尾，先计算结果
-		const result = evaluateExpression(expression.value + ' ' + currentValue.value)
-		if (result !== null) {
-			currentValue.value = result.toString()
+	// 如果表达式为空，开始新表达式
+	if (!expression.value) {
+		expression.value = currentValue.value + op
+		waitingForOperand.value = true
+	} else {
+		// 如果还在等待输入操作数（刚输入了运算符），则替换运算符
+		if (waitingForOperand.value) {
+			// 替换最后一个运算符
+			expression.value = expression.value.slice(0, -1) + op
+		} else {
+			// 如果表达式已存在且有新的操作数，先计算当前结果，然后添加新运算符
+			const fullExpr = expression.value + currentValue.value
+			const result = evaluateExpression(fullExpr)
+			if (result !== null) {
+				currentValue.value = result.toString()
+				expression.value = currentValue.value + op
+				waitingForOperand.value = true
+				emitValue()
+			}
 		}
 	}
-	
-	// 构建新表达式
-	expression.value = currentValue.value + ' ' + op
-	waitingForOperand.value = true
 	
 	// 触发震动反馈
 	// #ifdef APP-PLUS
@@ -216,7 +306,7 @@ const evaluateExpression = (expr) => {
 const handleCalculate = () => {
 	if (!expression.value || !currentValue.value) return
 	
-	const fullExpression = expression.value + ' ' + currentValue.value
+	const fullExpression = expression.value + currentValue.value
 	console.log('计算表达式:', fullExpression)
 	
 	const result = evaluateExpression(fullExpression)
@@ -284,7 +374,7 @@ const handleHide = () => {
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background-color: rgba(0, 0, 0, 0.4);
+		background-color: transparent;
 	}
 	
 	.keyboard-container {
@@ -298,38 +388,14 @@ const handleHide = () => {
 		padding-bottom: constant(safe-area-inset-bottom);
 		padding-bottom: env(safe-area-inset-bottom);
 		box-shadow: 0 -4rpx 24rpx rgba(0, 0, 0, 0.1);
-	}
-	
-	.keyboard-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 24rpx 32rpx;
-		border-bottom: 1rpx solid #e8e8ed;
 		
-		.keyboard-title {
-			font-size: 28rpx;
-			color: #333;
-			font-weight: 500;
-		}
-		
-		.close-btn {
-			width: 48rpx;
-			height: 48rpx;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			
-			.close-icon {
-				font-size: 48rpx;
-				color: #999;
-				line-height: 1;
-			}
+		&.shake {
+			animation: shake 0.5s ease-in-out;
 		}
 	}
 	
 	.display-area {
-		padding: 24rpx 32rpx;
+		padding: 24rpx 32rpx 20rpx;
 		background: #fff;
 		border-bottom: 1rpx solid #e8e8ed;
 		display: flex;
@@ -348,7 +414,7 @@ const handleHide = () => {
 			flex-direction: column;
 			align-items: flex-end;
 			justify-content: center;
-			min-height: 80rpx;
+			min-height: 60rpx;
 			
 			.expression-text {
 				font-size: 24rpx;
@@ -367,17 +433,13 @@ const handleHide = () => {
 	}
 	
 	.keyboard-body {
-		display: flex;
 		padding: 20rpx;
-		gap: 16rpx;
 		
-		.number-area {
-			flex: 1;
-			
+		.main-area {
 			.key-row {
 				display: flex;
-				gap: 16rpx;
-				margin-bottom: 16rpx;
+				gap: 12rpx;
+				margin-bottom: 12rpx;
 				
 				&:last-child {
 					margin-bottom: 0;
@@ -386,13 +448,29 @@ const handleHide = () => {
 				&.bottom-row {
 					.key {
 						flex: 1;
+						
+						&.key-close {
+							flex: 0.8; // 关闭按钮缩小
+						}
+						
+						&.key-clear {
+							flex: 1.4; // 清空按钮稍宽
+						}
+						
+						&.key-delete {
+							flex: 0.8; // 删除按钮缩小
+						}
+						
+						&.key-equal {
+							flex: 1; // 等于按钮标准宽度
+						}
 					}
 				}
 			}
 			
 			.key {
 				flex: 1;
-				height: 100rpx;
+				height: 96rpx;
 				background: #fff;
 				border-radius: 16rpx;
 				display: flex;
@@ -409,20 +487,23 @@ const handleHide = () => {
 					background: #f0f0f0;
 				}
 				
-				&.key-zero {
-					flex: 2;
+				&.key-operator {
+					background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+					color: #fff;
+					font-weight: 600;
+					box-shadow: 0 4rpx 12rpx rgba(102, 126, 234, 0.3);
+					
+					&:active {
+						background: linear-gradient(135deg, #556dd9 0%, #653a91 100%);
+						box-shadow: 0 2rpx 8rpx rgba(102, 126, 234, 0.2);
+					}
 				}
 				
-				&.key-function {
+				&.key-close {
 					background: #e8e8ed;
-					font-size: 32rpx;
-					
-					.key-icon {
-						font-size: 36rpx;
-					}
 					
 					.key-text {
-						font-size: 28rpx;
+						font-size: 24rpx;
 						color: #666;
 					}
 					
@@ -430,39 +511,45 @@ const handleHide = () => {
 						background: #d8d8dd;
 					}
 				}
-			}
-		}
-		
-		.operator-area {
-			width: 100rpx;
-			display: flex;
-			flex-direction: column;
-			gap: 16rpx;
-			
-			.operator-key {
-				flex: 1;
-				background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-				border-radius: 16rpx;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				font-size: 40rpx;
-				color: #fff;
-				font-weight: 600;
-				box-shadow: 0 4rpx 12rpx rgba(102, 126, 234, 0.3);
-				transition: all 0.2s;
 				
-				&:active {
-					transform: scale(0.95);
-					box-shadow: 0 2rpx 8rpx rgba(102, 126, 234, 0.2);
-				}
-				
-				&.operator-equal {
+				&.key-clear {
 					background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
 					box-shadow: 0 4rpx 12rpx rgba(245, 87, 108, 0.3);
 					
+					.key-text {
+						font-size: 26rpx;
+						color: #fff;
+						font-weight: 600;
+					}
+					
 					&:active {
+						background: linear-gradient(135deg, #e082ea 0%, #e4465b 100%);
 						box-shadow: 0 2rpx 8rpx rgba(245, 87, 108, 0.2);
+					}
+				}
+				
+				&.key-delete {
+					background: #e8e8ed;
+					
+					.key-icon {
+						font-size: 32rpx;
+						color: #666;
+					}
+					
+					&:active {
+						background: #d8d8dd;
+					}
+				}
+				
+				&.key-equal {
+					background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+					color: #fff;
+					font-weight: 600;
+					box-shadow: 0 4rpx 12rpx rgba(67, 233, 123, 0.3);
+					
+					&:active {
+						background: linear-gradient(135deg, #32d86a 0%, #27e8c6 100%);
+						box-shadow: 0 2rpx 8rpx rgba(67, 233, 123, 0.2);
 					}
 				}
 			}
@@ -476,6 +563,18 @@ const handleHide = () => {
 	}
 	to {
 		transform: translateY(0);
+	}
+}
+
+@keyframes shake {
+	0%, 100% {
+		transform: translateX(0);
+	}
+	10%, 30%, 50%, 70%, 90% {
+		transform: translateX(-8rpx);
+	}
+	20%, 40%, 60%, 80% {
+		transform: translateX(8rpx);
 	}
 }
 </style>

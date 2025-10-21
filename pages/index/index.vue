@@ -62,6 +62,9 @@
 			v-model:value="inputValue"
 			:title="keyboardTitle"
 			:current-currency="getCurrencyInfo(currentInputCurrency)"
+			:all-currencies="displayCurrencies.map(code => getCurrencyInfo(code))"
+			:base-currency="currencyStore.baseCurrency"
+			:rates="rateStore.rates"
 			@input="handleInput"
 			@close="handleKeyboardClose"
 		/>
@@ -113,15 +116,21 @@ const isRefreshing = ref(false)
 // 基准货币选择
 const showBaseModal = ref(false)
 
-// 显示的币种列表（当前输入币种置顶）
+// 显示的币种列表（输入币种置顶，输入结束后保持第一位）
 const displayCurrencies = computed(() => {
 	const currencies = [...currencyStore.selectedCurrencies]
 	
-	// 如果有当前输入币种，将其移到第一位
+	// 优先级1: 当前正在输入的币种置顶
 	if (currentInputCurrency.value && currencies.includes(currentInputCurrency.value)) {
 		const index = currencies.indexOf(currentInputCurrency.value)
 		currencies.splice(index, 1)
 		currencies.unshift(currentInputCurrency.value)
+	}
+	// 优先级2: 最后一次输入的币种保持在第一位（即使已经结束输入）
+	else if (currencyStore.lastInputCurrency && currencies.includes(currencyStore.lastInputCurrency)) {
+		const index = currencies.indexOf(currencyStore.lastInputCurrency)
+		currencies.splice(index, 1)
+		currencies.unshift(currencyStore.lastInputCurrency)
 	}
 	
 	return currencies
@@ -351,6 +360,12 @@ const clearOtherCurrencies = (exceptCode) => {
 // 关闭键盘
 const handleKeyboardClose = () => {
 	keyboardVisible.value = false
+	
+	// 保存最后输入的货币（用于保持置顶）
+	if (currentInputCurrency.value && inputValue.value && inputValue.value !== '0') {
+		currencyStore.setLastInputCurrency(currentInputCurrency.value)
+	}
+	
 	currentInputCurrency.value = ''
 	
 	// 保存数据
@@ -587,7 +602,7 @@ uni.$on('currencySelected', () => {
 			
 			.base-divider {
 				font-size: 22rpx;
-				color: #ddd;
+				color: #666;
 				font-weight: 300;
 			}
 			
@@ -690,10 +705,15 @@ uni.$on('currencySelected', () => {
 	.currency-list {
 		flex: 1;
 		padding: 0;
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
 		
 		&.keyboard-open {
-			// 键盘打开时，减少高度以显示至少2个卡片
-			max-height: 40vh;
+			// 键盘打开时，调整高度以适应键盘，保持可滚动
+			height: calc(100vh - 650rpx);
+			max-height: calc(100vh - 650rpx);
+			flex: 0 0 auto;
+			overflow-y: scroll;
 		}
 		
 		.currency-cards {

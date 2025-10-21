@@ -5,13 +5,13 @@
 			<view class="currency-basic">
 				<text class="currency-flag">{{ currencyInfo.flag }}</text>
 			<view class="currency-names">
-				<text class="currency-name-only">{{ currencyInfo.name }}</text>
-				<text class="currency-divider">｜</text>
-				<text class="currency-code-text">{{ currencyInfo.code }}</text>
+				<text class="currency-name-only" :class="{ 'text-fade': hasValue }">{{ currencyInfo.name }}</text>
+				<text class="currency-divider" :class="{ 'text-fade': hasValue }">｜</text>
+				<text class="currency-code-text" :class="{ 'text-fade': hasValue }">{{ currencyInfo.code }}</text>
 			</view>
 			</view>
 			<view class="rate-display" v-if="rateDisplay">
-				<text class="rate-text">{{ rateDisplay }}</text>
+				<text class="rate-text" :class="{ 'text-fade': hasValue }">{{ rateDisplay }}</text>
 			</view>
 		</view>
 		
@@ -21,12 +21,14 @@
 			<text class="amount-value" :class="{ 'amount-zero': !amount || amount === '0', 'amount-active': isActive && !isEditing, 'amount-editing': isShowingOldValue, 'amount-new-input': isEditing && !isShowingOldValue }">
 				{{ displayAmount }}
 			</text>
+			<text class="amount-abbr" v-if="amountAbbr">{{ amountAbbr }}</text>
 		</view>
 	</view>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import { formatNumberAbbr } from '@/utils/format'
 
 const props = defineProps({
 	currencyInfo: {
@@ -76,6 +78,19 @@ const displayAmount = computed(() => {
 		return '0'
 	}
 	return props.amount
+})
+
+// 数值缩写
+const amountAbbr = computed(() => {
+	// 需要移除千分位分隔符后再计算
+	if (!props.amount || props.amount === '0' || props.amount === '') return ''
+	const cleanAmount = props.amount.replace(/,/g, '')
+	return formatNumberAbbr(cleanAmount)
+})
+
+// 是否有数值
+const hasValue = computed(() => {
+	return props.amount && props.amount !== '0' && props.amount !== ''
 })
 
 // 点击卡片聚焦
@@ -139,18 +154,33 @@ const handleLongPress = () => {
 					font-size: 28rpx;
 					font-weight: 600;
 					color: #333;
+					transition: color 0.3s;
+					
+					&.text-fade {
+						color: #999;
+					}
 				}
 				
 				.currency-divider {
 					font-size: 24rpx;
 					color: #ddd;
 					font-weight: 300;
+					transition: color 0.3s;
+					
+					&.text-fade {
+						color: #e8e8ed;
+					}
 				}
 				
 				.currency-code-text {
 					font-size: 24rpx;
 					font-weight: 400;
 					color: #999;
+					transition: color 0.3s;
+					
+					&.text-fade {
+						color: #ccc;
+					}
 				}
 			}
 		}
@@ -159,9 +189,14 @@ const handleLongPress = () => {
 			flex-shrink: 0;
 			
 			.rate-text {
-				font-size: 20rpx;
-				color: #bbb;
+				font-size: 24rpx;
+				color: #999;
 				font-weight: 400;
+				transition: color 0.3s;
+				
+				&.text-fade {
+					color: #ccc;
+				}
 			}
 		}
 	}
@@ -185,7 +220,7 @@ const handleLongPress = () => {
 	
 	.amount-input {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 8rpx;
 		padding: 12rpx 0 0;
 		
@@ -218,6 +253,13 @@ const handleLongPress = () => {
 			&.amount-new-input {
 				color: #007AFF;
 			}
+		}
+		
+		.amount-abbr {
+			font-size: 24rpx;
+			color: #007AFF;
+			font-weight: 600;
+			flex-shrink: 0;
 		}
 	}
 	

@@ -2,18 +2,20 @@ import { defineStore } from 'pinia'
 
 export const useCurrencyStore = defineStore('currency', {
 	state: () => ({
-		// 用户选择的币种代码列表
-		selectedCurrencies: ['CNY', 'USD', 'EUR'],
+		// 用户选择的币种代码列表（按添加顺序）
+		selectedCurrencies: ['CNY', 'USD'],
 		
 		// 各币种的金额
 		amounts: {
 			'CNY': '',
-			'USD': '',
-			'EUR': ''
+			'USD': ''
 		},
 		
 		// 当前正在输入的币种（活跃币种）
-		activeCurrency: ''
+		activeCurrency: '',
+		
+		// 最后一次输入的币种（用于保持置顶）
+		lastInputCurrency: ''
 	}),
 	
 	getters: {
@@ -56,6 +58,10 @@ export const useCurrencyStore = defineStore('currency', {
 		updateAmount(code, amount) {
 			this.amounts[code] = amount
 			this.activeCurrency = code
+			// 记录最后输入的货币（用于保持置顶）
+			if (amount && amount !== '0' && amount !== '') {
+				this.lastInputCurrency = code
+			}
 		},
 		
 		// 清空所有金额
@@ -81,6 +87,7 @@ export const useCurrencyStore = defineStore('currency', {
 			try {
 				const currencies = uni.getStorageSync('selectedCurrencies')
 				const amounts = uni.getStorageSync('currencyAmounts')
+				const lastInput = uni.getStorageSync('lastInputCurrency')
 				
 				if (currencies && currencies.length > 0) {
 					this.selectedCurrencies = currencies
@@ -89,8 +96,22 @@ export const useCurrencyStore = defineStore('currency', {
 				if (amounts) {
 					this.amounts = amounts
 				}
+				
+				if (lastInput) {
+					this.lastInputCurrency = lastInput
+				}
 			} catch (error) {
 				console.error('加载币种数据失败:', error)
+			}
+		},
+		
+		// 设置最后输入的货币
+		setLastInputCurrency(code) {
+			this.lastInputCurrency = code
+			try {
+				uni.setStorageSync('lastInputCurrency', code)
+			} catch (error) {
+				console.error('保存最后输入货币失败:', error)
 			}
 		}
 	}
