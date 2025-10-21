@@ -4,6 +4,16 @@
   "description": "汇率速算 - 多币种汇率计算器",
   "main": "main.js",
   "scripts": {
+    "dev:h5": "uni",
+    "build:h5": "uni build",
+    "dev:app": "uni -p app",
+    "dev:app-plus": "uni -p app",
+    "build:app": "uni build -p app",
+    "build:app-plus": "uni build -p app",
+    "dev:mp-weixin": "uni -p mp-weixin",
+    "build:mp-weixin": "uni build -p mp-weixin",
+    "dev:mp-alipay": "uni -p mp-alipay",
+    "build:mp-alipay": "uni build -p mp-alipay",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

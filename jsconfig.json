@@ -5,9 +5,14 @@
       "@/*": ["./*"]
     },
     "types": [
-      "@dcloudio/types"
+      "@dcloudio/types",
+      "node"
     ],
-    "jsx": "preserve"
+    "jsx": "preserve",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM"]
   },
   "exclude": [
     "node_modules",
