@@ -52,30 +52,43 @@ export const convertCurrency = (amount, fromCode, toCode, rates) => {
 /**
  * 格式化金额显示
  * @param {string|number} amount - 金额
- * @param {number} decimalPlaces - 小数位数
+ * @param {number} decimalPlaces - 小数位数（-1 表示保持原有小数位数，0 表示不显示小数）
  * @param {string} thousandSeparator - 千分位分隔符
  * @returns {string} 格式化后的金额
  */
 export const formatAmount = (amount, decimalPlaces = 2, thousandSeparator = ',') => {
-	if (!amount || amount === '' || amount === '0') return '0.00'
+	if (!amount || amount === '') {
+		return decimalPlaces === 0 ? '0' : '0.00'
+	}
 	
 	try {
-		const num = new Big(amount)
+		let formatted = amount.toString()
 		
-		// 保留指定小数位
-		let formatted = num.toFixed(decimalPlaces)
-		
-		// 添加千分位分隔符
-		if (thousandSeparator) {
-			const parts = formatted.split('.')
-			parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousandSeparator)
-			formatted = parts.join('.')
+		// 如果 decimalPlaces 为 -1，保持原有小数位数，只添加千分位
+		if (decimalPlaces === -1) {
+			// 直接添加千分位，不改变小数位
+			if (thousandSeparator) {
+				const parts = formatted.split('.')
+				parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousandSeparator)
+				formatted = parts.join('.')
+			}
+		} else {
+			// 使用 Big.js 处理
+			const num = new Big(amount)
+			formatted = num.toFixed(decimalPlaces)
+			
+			// 添加千分位分隔符
+			if (thousandSeparator) {
+				const parts = formatted.split('.')
+				parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousandSeparator)
+				formatted = parts.join('.')
+			}
 		}
 		
 		return formatted
 	} catch (error) {
 		console.error('格式化金额错误:', error)
-		return '0.00'
+		return decimalPlaces === 0 ? '0' : '0.00'
 	}
 }
 

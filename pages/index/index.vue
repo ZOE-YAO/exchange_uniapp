@@ -35,6 +35,7 @@
 					:is-base="code === rateStore.base"
 					:is-active="code === currentInputCurrency"
 					:is-editing="code === currentInputCurrency && keyboardVisible"
+					:is-showing-old-value="code === currentInputCurrency && keyboardVisible && (inputValue === '0' || inputValue === '')"
 					:show-delete="false"
 					@focus="handleFocus(code)"
 					@delete="handleDelete(code)"
@@ -142,14 +143,40 @@ const getCurrencyInfo = (code) => {
 const displayAmount = (code) => {
 	const amount = currencyStore.amounts[code]
 	
-	// 如果没有金额，显示 0
-	if (!amount || amount === '0' || amount === '') {
-		return '0'
+	// 如果是当前输入的币种且键盘可见（编辑状态）
+	if (code === currentInputCurrency.value && keyboardVisible.value) {
+		// 如果键盘上的值是 '0' 或空，显示老数值（置灰，最多2位小数）
+		if (inputValue.value === '0' || inputValue.value === '') {
+			if (!amount || amount === '0' || amount === '') {
+				return '0'
+			}
+			// 老数值：判断是否有小数
+			const numValue = parseFloat(amount)
+			const hasDecimal = amount.includes('.') && numValue !== Math.floor(numValue)
+			if (hasDecimal) {
+				// 有小数，显示最多2位小数
+				// 先转换为数字，保留2位小数，再去除尾部多余的0
+				let formatted = numValue.toFixed(2)
+				// 去除尾部多余的0
+				formatted = formatted.replace(/\.?0+$/, '')
+				// 如果去除后没有小数了，就是整数
+				if (!formatted.includes('.')) {
+					return formatAmount(formatted, 0, settingsStore.thousandSeparator)
+				}
+				return formatAmount(formatted, -1, settingsStore.thousandSeparator)
+			} else {
+				// 没有小数，不显示小数部分
+				return formatAmount(Math.floor(numValue).toString(), 0, settingsStore.thousandSeparator)
+			}
+		} else {
+			// 正在输入新值，显示新值（带千分位）
+			return formatAmount(inputValue.value, -1, settingsStore.thousandSeparator)
+		}
 	}
 	
-	// 如果是当前输入的币种，直接显示原始值（不格式化）
-	if (code === currentInputCurrency.value && keyboardVisible.value) {
-		return amount
+	// 非编辑状态
+	if (!amount || amount === '0' || amount === '') {
+		return '0'
 	}
 	
 	// 格式化显示：如果没有小数点，不显示小数部分
@@ -254,7 +281,8 @@ const handleFocus = (code) => {
 	}
 	
 	currentInputCurrency.value = code
-	inputValue.value = currencyStore.amounts[code] || ''
+	// 键盘初始值设为 '0'，让用户从头输入
+	inputValue.value = '0'
 	keyboardVisible.value = true
 	
 	// 触发震动反馈
@@ -521,7 +549,7 @@ uni.$on('currencySelected', () => {
 		align-items: center;
 		justify-content: space-between;
 		padding: calc(env(safe-area-inset-top) + 16rpx) 24rpx 12rpx;
-		background: #fff;
+		background: transparent;
 		z-index: 10;
 		position: sticky;
 		top: 0;
@@ -542,13 +570,13 @@ uni.$on('currencySelected', () => {
 			align-items: center;
 			gap: 8rpx;
 			padding: 8rpx 16rpx;
-			background: #f5f5f7;
+			background: #e8e8ed;
 			border-radius: 16rpx;
 			transition: all 0.3s;
 			cursor: pointer;
 			
 			&:active {
-				background: #e8e8ed;
+				background: #d8d8dd;
 			}
 			
 			.base-label {
@@ -597,7 +625,7 @@ uni.$on('currencySelected', () => {
 		
 		.dropdown-content {
 			position: absolute;
-			top: 80rpx;
+			top: calc(env(safe-area-inset-top) + 72rpx);
 			right: 24rpx;
 			background: #fff;
 			border-radius: 16rpx;

@@ -133,6 +133,14 @@ const handleInput = (key) => {
 	
 	let newValue = currentValue.value
 	
+	// 如果当前值是 '0' 或空，且输入的不是小数点，则直接替换（从头开始输入）
+	if ((newValue === '0' || newValue === '') && key !== '.') {
+		newValue = key
+		currentValue.value = newValue
+		emitValue()
+		return
+	}
+	
 	// 处理小数点
 	if (key === '.') {
 		if (newValue.includes('.')) return
@@ -152,8 +160,8 @@ const handleInput = (key) => {
 	
 	newValue += key
 	
-	// 去除开头多余的0
-	if (newValue.length > 1 && newValue[0] === '0' && newValue[1] !== '.') {
+	// 去除开头多余的0（如果后面不是小数点）
+	while (newValue.length > 1 && newValue[0] === '0' && newValue[1] !== '.') {
 		newValue = newValue.substring(1)
 	}
 	

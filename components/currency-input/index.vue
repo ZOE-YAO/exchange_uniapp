@@ -6,6 +6,8 @@
 				<text class="currency-flag">{{ currencyInfo.flag }}</text>
 			<view class="currency-names">
 				<text class="currency-name-only">{{ currencyInfo.name }}</text>
+				<text class="currency-divider">｜</text>
+				<text class="currency-code-text">{{ currencyInfo.code }}</text>
 			</view>
 			</view>
 			<view class="rate-display" v-if="rateDisplay">
@@ -16,7 +18,7 @@
 		<!-- 输入框 -->
 		<view class="amount-input" @click="handleFocus">
 			<text class="currency-symbol">{{ currencyInfo.symbol }}</text>
-			<text class="amount-value" :class="{ 'amount-zero': !amount || amount === '0', 'amount-active': isActive && !isEditing }">
+			<text class="amount-value" :class="{ 'amount-zero': !amount || amount === '0', 'amount-active': isActive && !isEditing, 'amount-editing': isShowingOldValue, 'amount-new-input': isEditing && !isShowingOldValue }">
 				{{ displayAmount }}
 			</text>
 		</view>
@@ -52,6 +54,10 @@ const props = defineProps({
 		default: false
 	},
 	isEditing: {
+		type: Boolean,
+		default: false
+	},
+	isShowingOldValue: {
 		type: Boolean,
 		default: false
 	},
@@ -93,7 +99,7 @@ const handleLongPress = () => {
 	background: #fff;
 	border-radius: 16rpx;
 	padding: 20rpx 24rpx;
-	margin: 0 0 12rpx 0;
+	margin: 0 0 20rpx 0;
 	box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
 	transition: all 0.3s;
 	border: 2rpx solid transparent;
@@ -111,7 +117,7 @@ const handleLongPress = () => {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 16rpx;
+		margin-bottom: 8rpx;
 		
 		.currency-basic {
 			display: flex;
@@ -127,11 +133,24 @@ const handleLongPress = () => {
 			.currency-names {
 				display: flex;
 				align-items: center;
+				gap: 8rpx;
 				
 				.currency-name-only {
 					font-size: 28rpx;
 					font-weight: 600;
 					color: #333;
+				}
+				
+				.currency-divider {
+					font-size: 24rpx;
+					color: #ddd;
+					font-weight: 300;
+				}
+				
+				.currency-code-text {
+					font-size: 24rpx;
+					font-weight: 400;
+					color: #999;
 				}
 			}
 		}
@@ -189,6 +208,14 @@ const handleLongPress = () => {
 			}
 			
 			&.amount-active {
+				color: #007AFF;
+			}
+			
+			&.amount-editing {
+				color: #999;
+			}
+			
+			&.amount-new-input {
 				color: #007AFF;
 			}
 		}
